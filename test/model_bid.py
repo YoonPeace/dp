@@ -23,20 +23,27 @@ base_lists = base_lists # base column unique value
 # 선형/비선형 알고리즘으로 각각의 데이터 예측
 
 # 직관에 의한 로직을 다른 곳에서 구성
+
+#%%
+# global f 
+# f
+
+#%%
+
 class Machine :
-        
+    
     def __init__(self, train, test, base_lists, subset_idx, variable_y) :
         
-        self.base_lists      = base_lists
-        self.subset_idx      = subset_idx
-        self.variable_y      = variable_y
-        self.subset_idx_num  = None # 외부에서 사용중
-        self.coef_num        = None # 외부에서 사용중
-        self.variable_y_num  = None # 외부에서 사용중
-        self.train           = train
-        self.test            = test
-        self.non_linear      = ['SVR'] # 비선형 알고리즘 <- SVR 먼저 구성 <- 나중에 configuration에서 가져오기
-        self.linear          = []
+        self._base_lists      = base_lists
+        self._subset_idx      = subset_idx
+        self._variable_y      = variable_y
+        self._subset_idx_num  = None # 외부에서 사용중
+        self._coef_num        = None # 외부에서 사용중
+        self._variable_y_num  = None # 외부에서 사용중
+        self._train           = train
+        self._test            = test
+        self._non_linear      = ['SVR'] # 비선형 알고리즘 <- SVR 먼저 구성 <- 나중에 configuration에서 가져오기
+        self._linear          = []
         
     # create Generator
     # 나중에 preprocess 패키지에서 import 현재는 정의하는 것으로
@@ -56,27 +63,27 @@ class Machine :
         for i in cg(df.columns) :
             if '_coef' in df.columns[i] :
                 coef_num.append(i)
-            if self.subset_idx in df.columns[i] :
+            if self._subset_idx in df.columns[i] :
                 subset_idx_num.append(i)
-            if self.variable_y in df.columns[i] :
+            if self._variable_y in df.columns[i] :
                 variable_y_num.append(i)
                 
-        self.coef_num        = coef_num
-        self.subset_idx_num  = subset_idx_num
-        self.variable_y_num  = variable_y_num
+        self._coef_num        = coef_num
+        self._subset_idx_num  = subset_idx_num
+        self._variable_y_num  = variable_y_num
         
         # __load_data 함수 실행
     def load_data(self, seq=0):
         
-        train_docX = self.train[self.train.iloc[:,self.subset_idx_num] == base_lists[seq]].iloc[:,self.coef_num].values
-        train_docY = self.train[self.train.iloc[:,self.subset_idx_num] == base_lists[seq]].iloc[:,self.variable_y_num].values
-        test_docX = self.test[self.test.iloc[:,self.subset_idx_num] == base_lists[seq]].iloc[:,self.coef_num].values
-        test_docY = self.test[self.test.iloc[:,self.subset_idx_num] == base_lists[seq]].iloc[:,self.variable_y_num].values
+        train_docX = self._train[self._train.iloc[:,self._subset_idx_num] == self._base_lists[seq]].iloc[:,self._coef_num].values
+        train_docY = self._train[self._train.iloc[:,self._subset_idx_num] == self._base_lists[seq]].iloc[:,self._variable_y_num].values
+        test_docX = self._test[self._test.iloc[:,self._subset_idx_num] == self._base_lists[seq]].iloc[:,self._coef_num].values
+        test_docY = self._test[self._test.iloc[:,self._subset_idx_num] == self._base_lists[seq]].iloc[:,self._variable_y_num].values
         
-        if 'SVR' in self.non_linear :
-            print(base_lists[seq])
+        if 'SVR' in self._non_linear :
+            print(self._base_lists[seq])
             print(train_docX) 
-            if base_lists[seq] in self.train.iloc[:,self.subset_idx_num]  :
+            if self._base_lists[seq] in self._train.iloc[:,self._subset_idx_num]  :
                 print(True)
             else : 
                 print(False)
@@ -88,27 +95,13 @@ t = Machine(df, df, base_lists, subset_idx, variable_y)
 t.find_x_y()
 t.load_data()
 #%%
-t.load_data()
+len(np.unique(train.prod_cd))
 #%%
 # 모델에 입력시킬 트레인 - test 셋의 x, y 값(count : 4)을 리턴
 
 
 
 
-
-
-def blog(name, *blogs) :
-    print(name)
-    for post in blogs :
-        print(post)
-    print(blogs)
-
-r = '3223'
-s = '23444423'
-g = '23123123r542144'
-
-blog(r,s,g)
-#%%
 df[df.iloc[:,0] == 2061827817].iloc[:,t._coef_num].values
 #%%
 calculate = 0
@@ -165,9 +158,27 @@ def _load_data(data, n_prev, n_next):
 # x 지정 <- 원 데이터의 컬럼 기준으로 y, x_var, 시계열데이터(인덱스)만 가지고 x를 정의 하여 matrix form으로 변경
         
 
+#%%
+train_X_set
+#%%
+docX, docY = [], []
+n_prev=24
+n_next=0
+for i in range(1):
+    train_set = train[train['prod_cd']==2065014763]
+    test_set = test[test['prod_cd']==2065014763]
+    train_X_set, train_Y_set = _load_data(train_set, n_prev, n_next)
+    test_X_set, test_Y_set = _load_data(test_set, n_prev, n_next)
 
 #%%
-train = df
+
+    train_X_set, train_Y_set = _load_data(train_set, n_prev, n_next)
+    test_X_set, test_Y_set = _load_data(test_set, n_prev, n_next)
+
+#%%
+train = train
+#%%
+train
 #%%
 x[0]
 

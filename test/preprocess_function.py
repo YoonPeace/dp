@@ -11,7 +11,16 @@ import pandas as pd
 import numpy as np
 import re
 from statsmodels.formula.api import ols
+from sklearn.model_selection import train_test_split
+#%%
+# global 변수
+global seed
+global x
+global subset_idx
 
+seed, x, subset_idx = 8, 'datetime', 'prod_cd'
+
+#%%
 df = pd.read_csv(path+'\\'+os.listdir(path)[0], encoding='utf-8')
 print(df.shape)
 #%%
@@ -26,36 +35,35 @@ def cg(lists) :
         yield i
 
 #%%
-
 # train, data set 분리
 # function split_train_and_test_set : train-test 데이터를 분리시킨다.
-# df : 데이터 셋
-# x : 기준컬럼
-# rate : train, test, validate data 비율(list)
-# 튜닝 대상
-from sklearn.model_selection import train_test_split
-
-def split_train_and_test_set(df, x, rate) :
-    # x 기준 정렬    
+def split_train_and_test_set(df, x, subset_idx, *rate) :
+    # df : 데이터 셋
+    # x : 기준컬럼
+    # rate : train, test, validate data 비율(list)
+    # train 데이터가 더 많은 학습 데이터를 확보할 수 있도록 함
+    # x, subset_idx 기준 데이터 정렬(내림차순)
+    # test 데이터 대상이 되는 데이터만 학습
+    df = df.sort_values(by=[x, subset_idx], ascending=False)
+    temp = []
+    for num in rate :
+        temp.append(num)
+    temp.sort(reverse=True) # 오름차순(작은값 먼저)
+    base_rt = temp[0]
+    print(base_rt)
     try :
-        if len(rate) == 1 :
-            train, test = train_test_split(df, test_size=rate[0])
-    
-            return train, test
-        elif len(rate) >= 3 :
-            probs = np.random.rapnd(len(df))
-            train_mask = probs < rate[0]
-            test_mask = (probs >= rate[0]) & (probs < rate[0] + rate[1])
-            validation_mask = probs >= 1 - rate[2]
+        if (sum(np.array(rate)) >= 0.99) & (sum(np.array(rate)) <= 1.01) :  
+            train, test = train_test_split(df, train_size = base_rt, random_state=seed, shuffle=False)
+            if len(rate) >= 3 :
+                validate, test = train_test_split(test, test_size = temp[1], random_state=seed, shuffle=False)
+            else :
+                validate = None
+            return train, validate, test
             
-            train, test, validation = df[train_mask], df[test_mask], df[validation_mask]
-            return train, test, validation
     except Exception as e :
         print(e)
-
-#### ex 
-train, test = split_train_and_test_set(df, 'datetime', [0.2])
-#%%    
+train, validate, test = split_train_and_test_set(df, x, subset_idx, 0.7, 0.3)
+#%%
 # Standardization 1
 
 ## function stats_dataframe : 특정 컬럼 기준- y의 mean, stddev 그룹핑을 수행한다
@@ -81,12 +89,12 @@ def stats_dataframe(df, x, y, method) :
 # 상수는 나중에 변경
 # 상수
 x_var = ['tot_disc', 'dow', 'hr']
-subset_idx = 'prod_cd'
 variable_y = 'sell_qty'
 iterate = ['mean','stddev']
 
 for i in range(len(iterate)) :
     train = stats_dataframe(train, subset_idx, variable_y, iterate[i])
+    test  = stats_dataframe(test , subset_idx, variable_y, iterate[i])
 
 #%%    
 # Standardization 2
@@ -101,6 +109,7 @@ def merge_dataframe(df, y) :
 
 #example
 train = merge_dataframe(train, variable_y)
+test  = merge_dataframe(test , variable_y)
 #%%
 # OLS
 ## function value_store : 데이터셋 내 y와 독립변수들 간의 계수와 p_value를 뽑아 낸다
@@ -270,7 +279,6 @@ def concat_dataframe(df, sets, x_var) :
             
         temp[key] = datatype_chk(origin_join1, temp_join1)
         temp[subset_idx] = datatype_chk(origin_join2, temp_join2)
-        
         # 독립변수의 계수 p_value, 병합
         if i == 0 :
             merge_dataframe = pd.merge(df, temp, left_on=[key, subset_idx], right_on = [key, subset_idx], how='left')
@@ -314,18 +322,40 @@ def after_job(rate=0.05):
     # 필요하지 않는 데이터 삭제(key2)
     df.drop(_key2, axis=1, inplace=True)
     return df, coef
-df, coef = after_job(0.05)
+train, coef = after_job(0.05)
 #%%
 
 # y에 영향을 주는 각각의 독립변수의 영향력을 계산한다.
 def estimate_individual_power(df, x_var, coef):
     df['all_individual_power'] = df['normal_y']
+    colname = ['all_individual_power']
     for i in cg(coef) :
         baseline = x_var[i] + '_' + 'individual_power'
+        colname.append(baseline)
         df[baseline] = df['normal_y'] / df[coef[i]]            
         df['all_individual_power'] = df['all_individual_power'] / df[coef[i]]
      
-    return df
+    return df, colname
 
-df = estimate_individual_power(df, x_var, coef)
+train, test_colname = estimate_individual_power(train, x_var, coef)
+#%%
+# 각 독립변수의 영향력을 concat 입력
+def testset_process(test, train, x_var, test_colname, subset_idx):
+    x = [subset_idx] + x_var
+    # test 독립변수 지정
+    testset = test[x]
+    # 계수 집계 시 median 값으로 처리
+    trainset = train[x + test_colname + coef].groupby(x).median().reset_index()
+    # testset 기준 병합
+    testset = pd.merge(testset, trainset, left_on=x, right_on=x, how='left')
+    trainset['normal_y'] = train['normal_y']
+    # 결측치 처리
+    # 1로 처리 <- 예측 불가
+    for null in cg(testset.columns) :
+        if testset.iloc[:,null].isna().any() == True :
+            testset.iloc[:, null] = testset.iloc[:, null].fillna(1)
+            
+    return testset
+
+testset = testset_process(test, train, x_var, test_colname, subset_idx)
 #%%
