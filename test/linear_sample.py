@@ -18,7 +18,7 @@ svm_reg.fit(X,y)
 #%%
 y_pred = svm_reg.predict(X)
 #%%
-y_pred -y
+y_pred - y
 #%%
 
 #%%
@@ -26,6 +26,7 @@ y_pred -y
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import Lasso, LinearRegression, Ridge, ElasticNet
 from sklearn.svm import SVR
+import math
 
 # 클래스 변수
 Linear_model = ["Lasso", "ElasticNet", "Linear Regression", "Ridge"]
@@ -63,20 +64,39 @@ for models in cg(Linear_model) :
     except Exception as e :
         print(e)
 
-pred['normal_y'] = test['normal_y']
+pred['y'] = test['normal_y']
 #%%
 # sell_qty 복귀
 # normalize된 데이터를 sell_qty로 복귀(역산)
 # train의 mean_value, std_value로 de-normalization
 after_process = pd.concat([test, pred], axis=1)
-# 에러 처리
-if pred.iloc[:,0].isna().any() == True :
-    print('t')
-after_process['denormal_y'] = ((after_process['y'] * after_process['std_value']) + after_process['mean_value'])
+#%%
+after_process['denormal_y'] = (after_process['Lasso_predictions'] * after_process['stddev_value']) + after_process['mean_value']
+#%%
+
 
 #%%
+# 에러 처리
+# if pred.iloc[:,0].isna().any() == True :
+after_process['denormal_y'] = ((after_process['normal_y'] * after_process['std_value']) + after_process['mean_value'])
+
 for i in cg(pred.columns) :
-    print("{} accuracy : {}".format(pred.columns[i], 1-abs(np.mean((abs(pred.iloc[:, i]) - abs(pred['y'])) / abs(pred['y'])))))
+    print("{} MAPE accuracy : {}".format(pred.columns[i], 1-abs(np.mean((abs(pred.iloc[:, i]) - abs(pred['y'])) / abs(pred['y'])))))
+    print("{} RMSE accuracy : {}".format(pred.columns[i], (math.sqrt(abs(round(pred.iloc[:, i] - (pred['y']**2)).sum())) * -1) / len(pred['y'])))
+    after_process['denormal_y'] = (after_process[pred.columns[i]] * after_process['stddev_value']) + after_process['mean_value']
+    print(int(pd.Series(abs(after_process['sell_qty'].values - after_process['denormal_y'].values)/after_process['denormal_y'].values/len(after_process['sell_qty'].values)*100).sum()))
+
+#%%
+after_process
+#%%
+after_process.denormal_y
+
+#%%
+sum(abs(pred.iloc[:, 0]) - abs(pred['y']**2))
+
+#%%^    print("{} MAE accuracy : {}".format(pred.columns[i], 1-abs(np.mean((abs(pred.iloc[:, i]) - abs(pred['y'])) / abs(pred['y'])))))
+    print (j,np.unique(result.prod_cd)[j], "RMSE : ",math.sqrt(sum((pred.iloc[:, i] - pred['y']**2/ len(pred['y']))))
+    print( j,np.unique(result.prod_cd)[j], "MAE : ", sum(abs(calc_l['with_disc_real_pred'] - pred['sell_qty']))/len(calc_l['sell_qty']))
 
 
 #%%

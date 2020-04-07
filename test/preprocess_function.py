@@ -73,11 +73,11 @@ train, validate, test = split_train_and_test_set(df, x, subset_idx, 0.7, 0.3)
 ### x = 기준 컬럼
 ### methond = 원하는 방법
 def stats_dataframe(df, x, y, method) :
-    if method == 'mean' :
+    if method == 'mean_value' :
         colname = [x,'mean_value']
         target_dataframe = pd.DataFrame(df.groupby([x])[y].mean().reset_index())
-    elif method == 'stddev' :
-        colname = [x,'std_value']
+    elif method == 'stddev_value' :
+        colname = [x,'stddev_value']
         target_dataframe = pd.DataFrame(df.groupby([x])[y].std().reset_index())     
     
     target_dataframe.columns = colname
@@ -90,12 +90,10 @@ def stats_dataframe(df, x, y, method) :
 # 상수
 x_var = ['tot_disc', 'dow', 'hr']
 variable_y = 'sell_qty'
-iterate = ['mean','stddev']
+iterate = ['mean_value','stddev_value']
 
 for i in range(len(iterate)) :
     train = stats_dataframe(train, subset_idx, variable_y, iterate[i])
-    test  = stats_dataframe(test , subset_idx, variable_y, iterate[i])
-
 #%%    
 # Standardization 2
 
@@ -104,12 +102,11 @@ for i in range(len(iterate)) :
 ### df : 데이터 셋
 ### y = 종속 변수
 def merge_dataframe(df, y) :
-    df['normal_y'] = (df[y] - df['mean_value']) / df['std_value']        
+    df['normal_y'] = (df[y] - df['mean_value']) / df['stddev_value']        
     return df
 
 #example
 train = merge_dataframe(train, variable_y)
-test  = merge_dataframe(test , variable_y)
 #%%
 # OLS
 ## function value_store : 데이터셋 내 y와 독립변수들 간의 계수와 p_value를 뽑아 낸다
@@ -345,7 +342,8 @@ def testset_process(test, train, x_var, test_colname, subset_idx):
     # test 독립변수 지정
     testset = test[x]
     # 계수 집계 시 median 값으로 처리
-    trainset = train[x + test_colname + coef].groupby(x).median().reset_index()
+    print(x, coef, test_colname, iterate)
+    trainset = train[x + test_colname + coef + iterate].groupby(x).median().reset_index()
     # testset 기준 병합
     testset = pd.merge(testset, trainset, left_on=x, right_on=x, how='left')
     trainset['normal_y'] = train['normal_y']
@@ -358,4 +356,3 @@ def testset_process(test, train, x_var, test_colname, subset_idx):
     return testset
 
 testset = testset_process(test, train, x_var, test_colname, subset_idx)
-#%%
