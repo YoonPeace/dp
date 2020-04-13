@@ -10,6 +10,7 @@ import os
 import pandas as pd
 import numpy as np
 import re
+# import sys
 from statsmodels.formula.api import ols
 from sklearn.model_selection import train_test_split
 #%%
@@ -17,9 +18,12 @@ from sklearn.model_selection import train_test_split
 global seed
 global x
 global subset_idx
-
-seed, x, subset_idx = 8, 'datetime', 'prod_cd'
-
+global variable_y
+global iterate
+seed, x, subset_idx, variable_y = 8, 'datetime', 'prod_cd', 'sell_qty'
+# 시계열 값이 앙닌 독립 변수
+x_var = ['tot_disc']
+iterate = ['mean_value','stddev_value']
 #%%
 df = pd.read_csv(path+'\\'+os.listdir(path)[0], encoding='utf-8')
 print(df.shape)
@@ -33,36 +37,86 @@ def cg(lists) :
     iter_range = range(len(lists))
     for i in iter_range :
         yield i
+#%%
+# train, test 모두 데이터 생성하기 위한 함수
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
+def search_date(df) :
+    base = 14
+    boolean_statement = df[x].apply(lambda x : len(str(x))).unique()[0] <= base
+    
+    if  boolean_statement == True :        
+        datecol = base - df[x].apply(lambda x : len(str(x))).unique()[0]
+        datecol = pd.DatetimeIndex(df[x].astype(str) + str('0' * datecol))
 
+    temp = {}
+    temp['year_col'] = datecol.year
+    temp['quarter_col'] = datecol.month    
+    temp['month_col'] = datecol.month
+    temp['dayofweek_col'] = datecol.dayofweek
+    temp['weekofyear_col'] = datecol.weekofyear
+    temp['dayofyear_col'] = datecol.dayofweek
+    temp['day_col'] = datecol.day
+    temp['hour_col'] = datecol.hour
+    temp['minute_col'] = datecol.minute
+    temp['second_col'] = datecol.second
+
+    temp = pd.DataFrame(temp)
+    tc = temp.columns
+    
+    # 값이 하나만 있는 경우는 컬럼 Drop(의미가 없음)
+    for i in cg(tc) :
+        if len(temp[tc[i]].unique()) == 1 :
+            temp.drop(columns=tc[i], inplace=True)
+
+    df = pd.concat([df, temp], axis=1)
+    df = df[set(df.columns)]
+    selection_list = list(df.columns.intersection(temp.columns))
+    return df[set(df.columns)], selection_list
+#%%
+## 2020.04.13
+
+df, selection_list = search_date(df)
+date_col = selection_list
+#%%
+# 여기까지 상수 및 설정 단계
+# 필요한 경우 date_col를 선택가능 함
+## 2020.04.13
+
+global x_var
+x_var =  x_var + date_col
 #%%
 # train, data set 분리
 # function split_train_and_test_set : train-test 데이터를 분리시킨다.
-def split_train_and_test_set(df, x, subset_idx, *rate) :
+        
+def split_train_and_test_set(df, x, subset_idx, test, *rate) :
     # df : 데이터 셋
     # x : 기준컬럼
     # rate : train, test, validate data 비율(list)
     # train 데이터가 더 많은 학습 데이터를 확보할 수 있도록 함
     # x, subset_idx 기준 데이터 정렬(내림차순)
     # test 데이터 대상이 되는 데이터만 학습
+    
     df = df.sort_values(by=[x, subset_idx], ascending=False)
     temp = []
     for num in rate :
         temp.append(num)
     temp.sort(reverse=True) # 오름차순(작은값 먼저)
     base_rt = temp[0]
-    print(base_rt)
     try :
         if (sum(np.array(rate)) >= 0.99) & (sum(np.array(rate)) <= 1.01) :  
-            train, test = train_test_split(df, train_size = base_rt, random_state=seed, shuffle=False)
+            train, validate = train_test_split(df, train_size = base_rt, random_state=seed, shuffle=False)
             if len(rate) >= 3 :
-                validate, test = train_test_split(test, test_size = temp[1], random_state=seed, shuffle=False)
-            else :
-                validate = None
+                validate, validate = train_test_split(test, test_size = temp[1], random_state=seed, shuffle=False)
+                
             return train, validate, test
             
     except Exception as e :
         print(e)
-train, validate, test = split_train_and_test_set(df, x, subset_idx, 0.7, 0.3)
+train, validate, test = split_train_and_test_set(df, x, subset_idx, None, 0.7, 0.3)
 #%%
 # Standardization 1
 
@@ -86,12 +140,6 @@ def stats_dataframe(df, x, y, method) :
     return target_dataframe
 
 #%%
-# 상수는 나중에 변경
-# 상수
-x_var = ['tot_disc', 'dow', 'hr']
-variable_y = 'sell_qty'
-iterate = ['mean_value','stddev_value']
-
 for i in range(len(iterate)) :
     train = stats_dataframe(train, subset_idx, variable_y, iterate[i])
 #%%    
@@ -163,19 +211,28 @@ def value_store (df, x, x_var, normal_y, y) :
 
 min_variables, variables_name, base_lists, param_coef, param_pval, formula_set = value_store(train, subset_idx, x_var, 'normal_y', variable_y)
 #%%
+# validate
+# print(min_variables[0:6])
+# print(variables_name[0:6])
+# print(base_lists[0])
+# print(param_coef[0])
+# print(param_pval[0])
+# print(formula_set[0])
+#%%
 # function coef_extract
 ## 독립변수의 각 계수 산출
-# min_idx : minimum coefficient, params : 변수 내 도메인, val : 계수 값, base : 독립변수 명
+# min_idx : minimum coefficient, params : 변수 내 도메인, val : 계수 값, base : 독립변수 명, seq : subset_idx 기준
 def coef_extract(min_idx, params_df, pval_df, x_var, seq) :
     # parameter_coef
     # idx = []
     # pval = pval_df[0].values[pd.Series(pval_df[0].index).apply(lambda x: x.split(')')[0][2:2+len(base)]) == base]
     # coef = params_df[0].values[pd.Series(params_df[0].index).apply(lambda x: x.split(')')[0][2:2+len(base)]) == base]
-    text = str(params_df)
+    text = str(pd.DataFrame(param_coef[seq]).T.index)
+    
     name_p = re.compile("T\.\d+\.+\d+|T\.\d+")
     name_m = name_p.findall(text)
     names = pd.Series(name_m).apply(lambda x :x.replace('T.','')).values
-    
+
     do_p = re.compile("C\(+\S+")
     do_m = do_p.findall(text)
     domain = pd.Series(do_m).apply(lambda x : x.replace(",","").replace("C(","")).values
@@ -183,30 +240,13 @@ def coef_extract(min_idx, params_df, pval_df, x_var, seq) :
     baseline_p = re.compile("Treatment\(\d+\.\d+|Treatment\(\d+")
     baseline_m = baseline_p.findall(text)
     baseline = pd.Series(baseline_m).apply(lambda x : x.replace("Treatment(", "")).values
-
+    
     coef = np.array(params_df)
     pval = np.array(pval_df)
     
     dataframe = pd.DataFrame([names, domain, np.ravel(coef, order='C')[1:], np.ravel(pval, order='C')[1:], baseline]).T
     dataframe.columns = ['key1', 'key2', 'coef', 'pvalue', 'baseline']
-    
-    # for point in range(1, len(params)-1):
-        # idx.append(point)
-        # if point == min_idx:
-        #    idx.pop(point)
-    # return coef, pval, names, domain #, idx
     return dataframe
-#%%
-## function columns_name : value_store로 산출된 데이터를 데이터프레임화 한다.
-## parameter
-### x_var : 독립변수 집합
-### base_lists : 서브셋 독립변수 기준
-### rows : iteration 변수
-    
-# def columns_name(base_lists, x_var, row) :
-    # base_lists_name = pd.Series(base_lists).apply(lambda x : str(x) + '_' + x_var[row])
-    # base_lists_name = pd.Series(base_lists).apply(lambda x : str(x))
-    # return list(base_lists_name)
 #%%    
 ## function to_df_process : value_store로 산출된 데이터를 데이터프레임화 한다.
 ## parameter
@@ -248,50 +288,57 @@ sets = to_df_process(x_var, min_variables, param_coef, param_pval, base_lists)
 # dataframe : 보낼 데이터프레임
 # path : 떨굴 장소
 
-def export_to_file(dataframe, path) :
-    dataframe.to_csv(path + '\\20200324temp.csv', encoding='utf-8', index=False)
+# def export_to_file(dataframe, path) :
+#    dataframe.to_csv(path + '\\20200324temp.csv', encoding='utf-8', index=False)
 
-export_to_file(sets, config)
+# export_to_file(sets, config)
 #%%
 # functions concat_dataframe 
 # origin 데이터프레임의 컬럼과 데이터타입을 맞춘다.
 def concat_dataframe(df, sets, x_var) :
     for i in cg(x_var) :
-    #for i in range(2) :
+    # for i in range(2) :
         key = x_var[i]
         temp = sets[sets.key2 == key]
         temp.columns = x_var[i] + "_" + sets.columns
         temp.rename(columns={x_var[i] + "_" + "key1" : key, x_var[i] + "_" + "subset_idx" : subset_idx}, inplace=True)
-        print(temp.columns)
+        
         # 조인 전 데이터타입 처리
         # key1<-key2를 참조, subset_idx
-        temp_join1, temp_join2 = temp[key], temp[subset_idx]
-        origin_join1, origin_join2 = train[key], train[subset_idx]
+        temp_join = temp.reset_index().iloc[:,1:]
+            
+        #temp_join = pd.DataFrame(temp[key].values, temp[subset_idx].values).reset_index()
         
+        # 검증을 위한 데이터타입 체크        
         def datatype_chk(origin_col, temp_col) :
             if origin_col.dtype != temp_col.dtype :
                 cd = origin_col.dtype
                 temp_col = temp_col.astype(cd)
                 return temp_col
             
-        temp[key] = datatype_chk(origin_join1, temp_join1)
-        temp[subset_idx] = datatype_chk(origin_join2, temp_join2)
+        temp_join[key] = datatype_chk(df[key], temp_join[key])
+        temp_join[subset_idx] = datatype_chk(df[subset_idx], temp_join[subset_idx])
+        
         # 독립변수의 계수 p_value, 병합
         if i == 0 :
-            merge_dataframe = pd.merge(df, temp, left_on=[key, subset_idx], right_on = [key, subset_idx], how='left')
+            merge_dataframe = pd.merge(df, temp_join, left_on=[key, subset_idx], right_on = [key, subset_idx], how='left')
         else :
-            merge_dataframe = pd.merge(merge_dataframe, temp, left_on=[key, subset_idx], right_on = [key, subset_idx], how='left')
+            merge_dataframe = pd.merge(merge_dataframe, temp_join, left_on=[key, subset_idx], right_on = [key, subset_idx], how='left')
     return merge_dataframe
-    
 #%%
 # functions after_job 
 # 데이터 후처리를 수행 한다. 데이터프레임의 컬럼과 데이터타입을 맞춘다.
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
 
 def after_job(rate=0.05):
     df = concat_dataframe(train, sets, x_var)
-    
+
     # 내부 데이터 정의
-    coef, _pvalues, _key2 = [], [], []
+    coef, _pvalues, _key2, _baseline = [], [], [], []
     for i in cg(df.columns) :
         if '_pvalue' in df.columns[i] :
             _pvalues.append(df.columns[i])
@@ -301,6 +348,9 @@ def after_job(rate=0.05):
         
         if '_key2' in df.columns[i] :
             _key2.append(df.columns[i])
+
+        if '_baseline' in df.columns[i] :
+            _baseline.append(df.columns[i])
             
     # pvalue가 1(가설을 충족하는 데이터 0%)로 가정  
     # pvalue 사실 여부 확인 
@@ -311,48 +361,95 @@ def after_job(rate=0.05):
         coef_chk[tempo == 1] = 1
         
         df[coef[j]] = coef_chk
-
-    # NaN 값 처리
-    # NaN 값 1로 채우기
-    df[coef], df[_pvalues] = df[coef].fillna(1), df[_pvalues].fillna(1)
-    
+        
     # 필요하지 않는 데이터 삭제(key2)
     df.drop(_key2, axis=1, inplace=True)
+    
+    # functions nullable_process 
+    # baseline이 있더라도 coef에서 산출되지 않는 경우 - 데이터가 한 포인트 밖에 없음
+    # NaN 값 처리
+    # NaN 값 1로 채우기
+    # df[coef], df[_pvalues] = df[coef].fillna(1), df[_pvalues].fillna(1)
+    def nullable_process() :
+        target = coef + _pvalues + _baseline
+        for i in cg(target) :
+            if df[target[i]].isna().any() == True :
+                df[target[i]] = df[target[i]].fillna(1)
+            # baseline 값 채우기 <- 원래 키값의 데이터로 입력
+            if (target[i] in _baseline) & (df[target[i]].isna().any() == True) :
+                print(target[i])
+        return df
+    
+    # 모든 p_value 값이 0인 경우 그 컬럼은 삭제
+    def nullable_column_drop(df):
+        for columns in cg(_pvalues) :
+            if len(df[df[_pvalues[columns]] == 1]) == len(df) :
+                
+                # coef,baseline, pvalues 삭제
+                df.drop(columns=_pvalues[columns], inplace=True)
+                df.drop(columns=_baseline[columns], inplace=True)
+                df.drop(columns=coef[columns], inplace=True)
+                coef.pop(columns)
+        return df
+    
+    # 최종 null값 체크 : 나중에는 삭제
+    for check in cg(df.columns) :
+        try :
+            if df[df.columns[check]].isna().any() == True :
+                break
+        except Exception as e :
+            print(e)
+            
+    df = nullable_process()
+    df = nullable_column_drop(df)
     return df, coef
-train, coef = after_job(0.05)
-#%%
 
+train, coef = after_job(0.125)
+#sample, coef = after_job(0.125)
+#%%
 # y에 영향을 주는 각각의 독립변수의 영향력을 계산한다.
-def estimate_individual_power(df, x_var, coef):
-    df['all_individual_power'] = df['normal_y']
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
+## 2020.04.13
+
+def estimate_individual_power(dset, x_var, coef):
+    dset['all_individual_power'] = dset['normal_y']
     colname = ['all_individual_power']
     for i in cg(coef) :
         baseline = x_var[i] + '_' + 'individual_power'
         colname.append(baseline)
-        df[baseline] = df['normal_y'] / df[coef[i]]            
-        df['all_individual_power'] = df['all_individual_power'] / df[coef[i]]
+        print(baseline)
+        dset[baseline] = dset['normal_y'] / dset[coef[i]]       
+        dset['all_individual_power'] = dset['all_individual_power'] / dset[coef[i]]
      
-    return df, colname
+    return dset, colname
 
-train, test_colname = estimate_individual_power(train, x_var, coef)
+sample, test_colname = estimate_individual_power(train, x_var, coef)
+# train, test_colname = estimate_individual_power(sample, x_var, coef)
 #%%
 # 각 독립변수의 영향력을 concat 입력
-def testset_process(test, train, x_var, test_colname, subset_idx):
-    x = [subset_idx] + x_var
-    # test 독립변수 지정
-    testset = test[x]
-    # 계수 집계 시 median 값으로 처리
-    print(x, coef, test_colname, iterate)
-    trainset = train[x + test_colname + coef + iterate].groupby(x).median().reset_index()
-    # testset 기준 병합
-    testset = pd.merge(testset, trainset, left_on=x, right_on=x, how='left')
-    trainset['normal_y'] = train['normal_y']
-    # 결측치 처리
-    # 1로 처리 <- 예측 불가
-    for null in cg(testset.columns) :
-        if testset.iloc[:,null].isna().any() == True :
-            testset.iloc[:, null] = testset.iloc[:, null].fillna(1)
-            
-    return testset
-
-testset = testset_process(test, train, x_var, test_colname, subset_idx)
+# 없는 경우 Aggregation : EMA로 최신 값을 적용
+def testset_process(validate, train, x_var, test_colname, subset_idx):
+    try :            
+        x = [subset_idx] + x_var
+        # validate 독립변수 지정
+        valset = validate[x]
+        # 계수 집계 시 median 값으로 처리
+        trainset = train[x + test_colname + coef + iterate].groupby(x).median().reset_index()
+        # valset 기준 병합
+        valset = pd.merge(valset, trainset, left_on=x, right_on=x, how='left')
+        trainset['normal_y'] = train['normal_y']
+        # 결측치 처리 
+        # outer join으로 있는 요소들만 필터링
+        #for null in cg(valset.columns) :
+        #    if valset.iloc[:,null].isna().any() == True :
+        #        valset.iloc[:, null] = valset.iloc[:, null].fillna(1)
+    except Exception as e : 
+        print(e)
+        pass
+                
+    return valset
+#%%    
+valset = testset_process(validate, train, x_var, test_colname, subset_idx)
